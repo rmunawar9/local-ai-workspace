@@ -12,25 +12,43 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-st.title("🤖 Local AI PDF Workspace")
+st.title("🤖 Local AI PDF & Coding Workspace")
 st.write("Secure offline analyzer featuring real-time stream generation.")
 
+# Sidebar Controls
+with st.sidebar:
+    st.header("⚙️ Workspace Controls")
 
-# Initialize the model engine
+    # 1. Dynamic Model Selection Dropdown
+    selected_model = st.selectbox(
+        "Select Local AI Model:",
+        options=["llama3.2", "qwen2.5-coder:1.5b"],
+        index=0,
+        help="Choose llama for general documents and qwen for coding tasks.",
+    )
+
+    st.markdown("---")
+    st.header("📂 Document Center")
+    uploaded_file = st.file_uploader("Upload your document.pdf here", type=["pdf"])
+
+    st.markdown("---")
+    # 2. Clear Chat History Button
+    if st.button("🗑️ Clear Chat History", use_container_width=True):
+        st.session_state.messages = []
+        st.toast("Conversation memory cleared!")
+        st.rerun()
+
+
+# Initialize the selected model engine dynamically
 @st.cache_resource
-def load_llm():
-    return ChatOllama(model="llama3.2", temperature=0, num_ctx=8192)
+def load_llm(model_name):
+    return ChatOllama(model=model_name, temperature=0, num_ctx=8192)
 
 
 try:
-    llm = load_llm()
+    llm = load_llm(selected_model)
 except Exception as e:
     st.error(f"Ollama Connection Error: {e}")
-
-# Sidebar Document Center
-with st.sidebar:
-    st.header("📂 Document Center")
-    uploaded_file = st.file_uploader("Upload your document.pdf here", type=["pdf"])
 
 # Main Application Logic
 if uploaded_file is not None:
@@ -65,7 +83,9 @@ if uploaded_file is not None:
             st.markdown(message["content"])
 
     # Accept new user text prompt input entries
-    if user_question := st.chat_input("Ask a question about this document..."):
+    if user_question := st.chat_input(
+        "Ask a question about this document or code task..."
+    ):
         with st.chat_message("user"):
             st.markdown(user_question)
         st.session_state.messages.append({"role": "user", "content": user_question})
@@ -73,15 +93,14 @@ if uploaded_file is not None:
         # Process and stream the response content live on screen
         with st.chat_message("assistant"):
             prompt = f"""
-            You are a data assistant analyzing a PDF. Use the extracted text to answer cleanly.
+            You are an advanced local AI assistant. Use the context below if provided to answer the question cleanly.
             ---
-            EXTRACTED CONTENT:
+            CONTEXT DATA:
             {st.session_state.get("pdf_text", "")}
             ---
             QUESTION: {user_question}
             """
 
-            # Use st.write_stream to draw the characters out word-by-word
             def response_generator():
                 for chunk in llm.stream(prompt):
                     yield chunk.content
@@ -92,9 +111,14 @@ if uploaded_file is not None:
 
         # Log conversation cleanly to file
         with open("ai_analysis_report.txt", "a", encoding="utf-8") as report_file:
-            report_file.write(f"Question: {user_question}\nAnswer:\n{ai_answer}\n\n")
+            report_file.write(
+                f"[{selected_model}] Question: {user_question}\nAnswer:\n{ai_answer}\n\n"
+            )
 
 else:
     st.info(
         "💡 Please drag and drop a PDF file into the left sidebar to activate the AI conversational layer."
+    )
+    st.info(
+        "💡 Note: You can switch models in the sidebar menu at any time depending on your task."
     )

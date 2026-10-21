@@ -54,3 +54,16 @@ Some of his notable roles include:
 
 He has received various awards and recognitions, including Oracle performance recognition, Microsoft Spot & Team Awards, and IBM global recognition. He holds a Master of Business Administration (MBA) from the University of Sunderland, UK, and a Bachelor of Science in Computer Science from The National College, Pakistan.
 
+[qwen2.5-coder:1.5b] Question: Write a fast Python function to check if a word is a palindrome.
+Answer:
+```python
+def is_palindrome(word):
+    # Normalize the word by removing spaces and converting to lowercase
+    normalized_word = word.replace(" ", "").lower()
+    
+    # Check if the word is equal to its reverse
+    return normalized_word == normalized_word[::-1]
+```
+
+This function `is_palindrome` takes a single argument, `word`, and returns `True` if the word is a palindrome, and `False` otherwise. It first normalizes the word by removing any spaces and converting all characters to lowercase to ensure the check is case-insensitive and ignores spaces. Then, it checks if the normalized word is equal to its reverse (obtained using slicing `[::-1]`). If they are equal, the word is a palindrome; otherwise, it is not.
+

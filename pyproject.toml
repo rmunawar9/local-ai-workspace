@@ -1,0 +1,21 @@
+[project]
+name = "local-ai-workspace"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "langchain-ollama>=1.1.0",
+    "pdf2image>=1.17.0",
+    "pypdf>=6.21.1",
+    "pytesseract>=0.3.13",
+    "streamlit>=1.66.0",
+    "watchdog>=6.0.0",
+]
+
+[project.scripts]
+local-ai-workspace = "local_ai_workspace:main"
+
+[build-system]
+requires = ["uv_build>=0.13.4,<0.14.0"]
+build-backend = "uv_build"

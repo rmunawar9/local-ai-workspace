@@ -6,7 +6,7 @@ from pdf2image import convert_from_path
 import pytesseract
 from markitdown import MarkItDown
 
-# Page Configuration Setup
+# 1. Global Page Settings
 st.set_page_config(
     page_title="Local AI Workspace",
     page_icon="🤖",
@@ -17,8 +17,16 @@ st.set_page_config(
 st.title("🤖 Local AI Multi-Tool Workspace")
 st.write("Secure offline analyzer, multi-document converter, and coding engine.")
 
+# Initialize dynamic session tracking for resets if empty
+if "uploader_key_pdf" not in st.session_state:
+    st.session_state["uploader_key_pdf"] = 100
+if "uploader_key_md" not in st.session_state:
+    st.session_state["uploader_key_md"] = 200
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-# Helper function to get local git changes
+
+# Helper function to track local Git changes
 def get_git_changes():
     try:
         result = subprocess.run(
@@ -29,7 +37,7 @@ def get_git_changes():
         return ""
 
 
-# Sidebar Controls
+# 2. Sidebar Workspace Control Panel
 with st.sidebar:
     st.header("⚙️ Workspace Controls")
 
@@ -55,7 +63,6 @@ with st.sidebar:
             - Start with a clear action verb (e.g., 'Add', 'Fix', 'Refactor', 'Update').
             - Output ONLY the raw text sentence.
             - Do NOT wrap it in quotes, code blocks, or markdown.
-            - Do NOT explain anything or print instructions.
             --- CODE CHANGES ---
             {changes}
             --------------------
@@ -64,13 +71,6 @@ with st.sidebar:
                 commit_response = commit_llm.invoke(commit_prompt)
                 st.sidebar.success("💡 Suggested Commit Message:")
                 st.sidebar.code(commit_response.content, language="text")
-
-    st.markdown("---")
-    if st.button("🗑️ Clear Chat History", use_container_width=True):
-        st.session_state.messages = []
-        st.session_state.pop("pdf_text", None)  # Reset extracted context
-        st.toast("Conversation memory cleared!")
-        st.rerun()
 
 
 # Initialize the selected model engine dynamically
@@ -89,13 +89,28 @@ tab1, tab2 = st.tabs(["💬 Local AI Document Chat", "📝 File to Markdown Conv
 
 # ==================== TAB 1: AI DOCUMENT CHAT ====================
 with tab1:
-    st.header("📂 Chat with Scanned PDFs")
-    # Added accept_multiple_files=True here
+    # Header layout with a targeted Reset Button for the chat tab only
+    col1, col2 = st.columns([6, 2], vertical_alignment="center")
+    with col1:
+        st.header("📂 Chat with Scanned PDFs")
+    with col2:
+        if st.button(
+            "🗑️ Clear Chat & Files",
+            key="reset_chat_tab",
+            use_container_width=True,
+            type="secondary",
+        ):
+            st.session_state.messages = []
+            st.session_state.pop("pdf_text", None)
+            st.session_state["uploader_key_pdf"] += 1
+            st.toast("Chat memory and uploaded PDFs cleared!")
+            st.rerun()
+
     uploaded_files = st.file_uploader(
         "Upload your document.pdf here:",
         type=["pdf"],
         accept_multiple_files=True,
-        key="pdf_chat_uploader",
+        key=f"pdf_uploader_{st.session_state['uploader_key_pdf']}",
     )
 
     if uploaded_files:
@@ -120,37 +135,40 @@ with tab1:
                             os.remove(temp_filename)
 
             st.session_state["pdf_text"] = combined_text
-            st.success("✅ All uploaded documents processed and merged into AI memory!")
+            st.success("✅ All uploaded documents processed into AI memory!")
 
-        if "messages" not in st.session_state:
-            st.session_state.messages = []
+        chat_scroll_area = st.container(height=500)
 
-        for message in st.session_state.messages:
-            with st.chat_message(message["role"]):
-                st.markdown(message["content"])
+        with chat_scroll_area:
+            for message in st.session_state.messages:
+                with st.chat_message(message["role"]):
+                    st.markdown(message["content"])
 
         if user_question := st.chat_input(
-            "Ask a question about your uploaded documents..."
+            "Ask a question about your uploaded documents...",
+            key="clean_workspace_chat_input",
         ):
-            with st.chat_message("user"):
-                st.markdown(user_question)
+            with chat_scroll_area:
+                with st.chat_message("user"):
+                    st.markdown(user_question)
             st.session_state.messages.append({"role": "user", "content": user_question})
 
-            with st.chat_message("assistant"):
-                prompt = f"""
-                You are a data assistant analyzing document context. Use the extracted text below to answer cleanly.
-                ---
-                EXTRACTED CONTENT:
-                {st.session_state.get("pdf_text", "")}
-                ---
-                QUESTION: {user_question}
-                """
+            with chat_scroll_area:
+                with st.chat_message("assistant"):
+                    prompt = f"""
+                    You are a data assistant analyzing document context. Use the extracted text below to answer cleanly.
+                    ---
+                    EXTRACTED CONTENT:
+                    {st.session_state.get("pdf_text", "")}
+                    ---
+                    QUESTION: {user_question}
+                    """
 
-                def response_generator():
-                    for chunk in llm.stream(prompt):
-                        yield chunk.content
+                    def response_generator():
+                        for chunk in llm.stream(prompt):
+                            yield chunk.content
 
-                ai_answer = st.write_stream(response_generator())
+                    ai_answer = st.write_stream(response_generator())
 
             st.session_state.messages.append(
                 {"role": "assistant", "content": ai_answer}
@@ -160,6 +178,8 @@ with tab1:
                 report_file.write(
                     f"Question: {user_question}\nAnswer:\n{ai_answer}\n\n"
                 )
+
+            st.rerun()
     else:
         st.info(
             "💡 Drop one or multiple PDF files here to activate the conversational chat box."
@@ -167,15 +187,28 @@ with tab1:
 
 # ==================== TAB 2: MARKDOWN CONVERTER ====================
 with tab2:
-    st.header("🔄 Universal Markdown Converter")
+    # Header layout with a targeted Reset Button for the markdown tab only
+    col1, col2 = st.columns([6, 2], vertical_alignment="center")
+    with col1:
+        st.header("🔄 Universal Markdown Converter")
+    with col2:
+        if st.button(
+            "🗑️ Clear Converter Files",
+            key="reset_md_tab",
+            use_container_width=True,
+            type="secondary",
+        ):
+            st.session_state["uploader_key_md"] += 1
+            st.toast("Markdown converter file queue cleared!")
+            st.rerun()
+
     st.write("Convert multiple files simultaneously into structured `.md` format.")
 
-    # Added accept_multiple_files=True here
     convert_files = st.file_uploader(
         "Upload Office or Text documents:",
         type=["pdf", "docx", "xlsx", "pptx", "txt", "html"],
         accept_multiple_files=True,
-        key="md_converter_uploader",
+        key=f"md_uploader_{st.session_state['uploader_key_md']}",
     )
 
     if convert_files:
@@ -193,7 +226,6 @@ with tab2:
                     md_result = md_engine.convert(temp_conv_name)
                     markdown_output = md_result.text_content
 
-                    # Create a nice layout expander window for each converted file
                     with st.expander(f"📄 Preview & Download: {file.name}"):
                         st.text_area(
                             "Markdown Code",
@@ -202,7 +234,9 @@ with tab2:
                             key=f"txt_{file.name}",
                         )
 
-                        clean_name = file.name.rsplit(".", 1)[0] + ".md"
+                        base_name, _ = os.path.splitext(file.name)
+                        clean_name = f"{base_name}.md"
+
                         st.download_button(
                             label=f"💾 Download {clean_name}",
                             data=markdown_output,

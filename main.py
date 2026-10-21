@@ -5,6 +5,7 @@ from langchain_ollama import ChatOllama
 from pdf2image import convert_from_path
 import pytesseract
 from markitdown import MarkItDown
+from langchain_community.tools import DuckDuckGoSearchRun
 
 # 1. Global Page Settings
 st.set_page_config(
@@ -15,7 +16,7 @@ st.set_page_config(
 )
 
 st.title("🤖 Local AI Multi-Tool Workspace")
-st.write("Secure offline analyzer, multi-document converter, and coding engine.")
+st.write("Secure offline analyzer, web-grounded search assistant, and coding engine.")
 
 # Initialize dynamic session tracking for resets if empty
 if "uploader_key_pdf" not in st.session_state:
@@ -49,6 +50,26 @@ with st.sidebar:
     )
 
     st.markdown("---")
+    # --- NEW SAFE MODE WEB TOGGLE SWITCH ---
+    st.header("🌐 Web Connections")
+    enable_web = st.toggle(
+        "Enable Web Grounding (Safe Mode)",
+        value=False,
+        help="Allows the model to securely lookup linked profiles or company websites when needed.",
+    )
+
+    st.markdown("---")
+    st.header("🔄 Session Management")
+    if st.button(
+        "🗑️ Clear Chat & Files", key="reset_chat_tab", use_container_width=True
+    ):
+        st.session_state.messages = []
+        st.session_state.pop("pdf_text", None)
+        st.session_state["uploader_key_pdf"] += 1
+        st.toast("Chat memory and uploaded PDFs cleared!")
+        st.rerun()
+
+    st.markdown("---")
     st.header("💻 Git Assistant Tools")
 
     if st.button("🤖 Generate Smart Commit", use_container_width=True):
@@ -62,7 +83,6 @@ with st.sidebar:
             Strict Rules:
             - Start with a clear action verb (e.g., 'Add', 'Fix', 'Refactor', 'Update').
             - Output ONLY the raw text sentence.
-            - Do NOT wrap it in quotes, code blocks, or markdown.
             --- CODE CHANGES ---
             {changes}
             --------------------
@@ -89,22 +109,7 @@ tab1, tab2 = st.tabs(["💬 Local AI Document Chat", "📝 File to Markdown Conv
 
 # ==================== TAB 1: AI DOCUMENT CHAT ====================
 with tab1:
-    # Header layout with a targeted Reset Button for the chat tab only
-    col1, col2 = st.columns([6, 2], vertical_alignment="center")
-    with col1:
-        st.header("📂 Chat with Scanned PDFs")
-    with col2:
-        if st.button(
-            "🗑️ Clear Chat & Files",
-            key="reset_chat_tab",
-            use_container_width=True,
-            type="secondary",
-        ):
-            st.session_state.messages = []
-            st.session_state.pop("pdf_text", None)
-            st.session_state["uploader_key_pdf"] += 1
-            st.toast("Chat memory and uploaded PDFs cleared!")
-            st.rerun()
+    st.header("📂 Chat with Scanned PDFs")
 
     uploaded_files = st.file_uploader(
         "Upload your document.pdf here:",
@@ -153,13 +158,29 @@ with tab1:
                     st.markdown(user_question)
             st.session_state.messages.append({"role": "user", "content": user_question})
 
+            # --- DYNAMIC WEB GROUNDING EXECUTION LAYER ---
+            web_context = ""
+            if enable_web:
+                with st.spinner("🌐 Performing secure safe-mode web search..."):
+                    try:
+                        search = DuckDuckGoSearchRun()
+                        # Pass the question directly to get real-time background context updates
+                        web_context = search.run(user_question)
+                    except Exception as web_err:
+                        web_context = f"Could not pull real-time web results: {web_err}"
+
             with chat_scroll_area:
                 with st.chat_message("assistant"):
                     prompt = f"""
-                    You are a data assistant analyzing document context. Use the extracted text below to answer cleanly.
-                    ---
-                    EXTRACTED CONTENT:
+                    You are an advanced data assistant analyzing document context combined with safe real-time web search information.
+                    Answer the question thoroughly using both fields if available.
+
+                    --- LOCAL EXTRACTED PDF CONTENT ---
                     {st.session_state.get("pdf_text", "")}
+                    
+                    --- REAL-TIME WEB SEARCH GROUNDING ---
+                    {web_context}
+                    
                     ---
                     QUESTION: {user_question}
                     """
@@ -187,13 +208,12 @@ with tab1:
 
 # ==================== TAB 2: MARKDOWN CONVERTER ====================
 with tab2:
-    # Header layout with a targeted Reset Button for the markdown tab only
-    col1, col2 = st.columns([6, 2], vertical_alignment="center")
+    col1, col2 = st.columns([0.85, 0.15], vertical_alignment="center")
     with col1:
         st.header("🔄 Universal Markdown Converter")
     with col2:
         if st.button(
-            "🗑️ Clear Converter Files",
+            "🗑️ Clear Files",
             key="reset_md_tab",
             use_container_width=True,
             type="secondary",
@@ -213,7 +233,6 @@ with tab2:
 
     if convert_files:
         md_engine = MarkItDown()
-
         for file in convert_files:
             file_ext = file.name.split(".")[-1]
             temp_conv_name = f"temp_convert_{file.name}"

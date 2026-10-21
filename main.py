@@ -15,7 +15,7 @@ st.set_page_config(
 )
 
 st.title("🤖 Local AI Multi-Tool Workspace")
-st.write("Secure offline analyzer, document converter, and coding engine.")
+st.write("Secure offline analyzer, multi-document converter, and coding engine.")
 
 
 # Helper function to get local git changes
@@ -68,6 +68,7 @@ with st.sidebar:
     st.markdown("---")
     if st.button("🗑️ Clear Chat History", use_container_width=True):
         st.session_state.messages = []
+        st.session_state.pop("pdf_text", None)  # Reset extracted context
         st.toast("Conversation memory cleared!")
         st.rerun()
 
@@ -89,29 +90,37 @@ tab1, tab2 = st.tabs(["💬 Local AI Document Chat", "📝 File to Markdown Conv
 # ==================== TAB 1: AI DOCUMENT CHAT ====================
 with tab1:
     st.header("📂 Chat with Scanned PDFs")
-    uploaded_file = st.file_uploader(
-        "Upload your document.pdf here", type=["pdf"], key="pdf_chat_uploader"
+    # Added accept_multiple_files=True here
+    uploaded_files = st.file_uploader(
+        "Upload your document.pdf here:",
+        type=["pdf"],
+        accept_multiple_files=True,
+        key="pdf_chat_uploader",
     )
 
-    if uploaded_file is not None:
-        temp_filename = "temp_uploaded_document.pdf"
-        with open(temp_filename, "wb") as f:
-            f.write(uploaded_file.getbuffer())
-
+    if uploaded_files:
         if "pdf_text" not in st.session_state:
-            with st.spinner("👁️ Running OCR Text Extraction..."):
-                try:
-                    pages = convert_from_path(temp_filename, 150)
-                    extracted_text = ""
-                    for page_image in pages:
-                        extracted_text += pytesseract.image_to_string(page_image) + "\n"
-                    st.session_state["pdf_text"] = extracted_text
-                    st.success(f"Loaded {len(pages)} pages successfully!")
-                except Exception as e:
-                    st.error(f"OCR Error: {e}")
-                finally:
-                    if os.path.exists(temp_filename):
-                        os.remove(temp_filename)
+            combined_text = ""
+            for uploaded_file in uploaded_files:
+                temp_filename = f"temp_{uploaded_file.name}"
+                with open(temp_filename, "wb") as f:
+                    f.write(uploaded_file.getbuffer())
+
+                with st.spinner(f"👁️ Running OCR Extraction on {uploaded_file.name}..."):
+                    try:
+                        pages = convert_from_path(temp_filename, 150)
+                        for page_image in pages:
+                            combined_text += (
+                                pytesseract.image_to_string(page_image) + "\n"
+                            )
+                    except Exception as e:
+                        st.error(f"OCR Error on {uploaded_file.name}: {e}")
+                    finally:
+                        if os.path.exists(temp_filename):
+                            os.remove(temp_filename)
+
+            st.session_state["pdf_text"] = combined_text
+            st.success("✅ All uploaded documents processed and merged into AI memory!")
 
         if "messages" not in st.session_state:
             st.session_state.messages = []
@@ -120,14 +129,16 @@ with tab1:
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
 
-        if user_question := st.chat_input("Ask a question about this document..."):
+        if user_question := st.chat_input(
+            "Ask a question about your uploaded documents..."
+        ):
             with st.chat_message("user"):
                 st.markdown(user_question)
             st.session_state.messages.append({"role": "user", "content": user_question})
 
             with st.chat_message("assistant"):
                 prompt = f"""
-                You are a data assistant analyzing a PDF. Use the extracted text to answer cleanly.
+                You are a data assistant analyzing document context. Use the extracted text below to answer cleanly.
                 ---
                 EXTRACTED CONTENT:
                 {st.session_state.get("pdf_text", "")}
@@ -150,53 +161,57 @@ with tab1:
                     f"Question: {user_question}\nAnswer:\n{ai_answer}\n\n"
                 )
     else:
-        st.info("💡 Drop a PDF file here to activate the conversational chat box.")
+        st.info(
+            "💡 Drop one or multiple PDF files here to activate the conversational chat box."
+        )
 
 # ==================== TAB 2: MARKDOWN CONVERTER ====================
 with tab2:
     st.header("🔄 Universal Markdown Converter")
-    st.write(
-        "Convert Word (`.docx`), Excel (`.xlsx`), PowerPoint (`.pptx`), or text logs directly into clean `.md` code structure."
-    )
+    st.write("Convert multiple files simultaneously into structured `.md` format.")
 
-    convert_file = st.file_uploader(
-        "Upload any Office or Text document:",
+    # Added accept_multiple_files=True here
+    convert_files = st.file_uploader(
+        "Upload Office or Text documents:",
         type=["pdf", "docx", "xlsx", "pptx", "txt", "html"],
+        accept_multiple_files=True,
         key="md_converter_uploader",
     )
 
-    if convert_file is not None:
-        # Save temporary file using its original naming extension layout
-        file_ext = convert_file.name.split(".")[-1]
-        temp_conv_name = f"temp_convert_input.{file_ext}"
+    if convert_files:
+        md_engine = MarkItDown()
 
-        with open(temp_conv_name, "wb") as f:
-            f.write(convert_file.getbuffer())
+        for file in convert_files:
+            file_ext = file.name.split(".")[-1]
+            temp_conv_name = f"temp_convert_{file.name}"
 
-        with st.spinner("Parsing structure and translating to Markdown..."):
-            try:
-                # Initialize Microsoft MarkItDown engine
-                md_engine = MarkItDown()
-                md_result = md_engine.convert(temp_conv_name)
-                markdown_output = md_result.text_content
+            with open(temp_conv_name, "wb") as f:
+                f.write(file.getbuffer())
 
-                st.success("🎉 Conversion Complete!")
+            with st.spinner(f"Converting {file.name} to Markdown..."):
+                try:
+                    md_result = md_engine.convert(temp_conv_name)
+                    markdown_output = md_result.text_content
 
-                # Show layout formatting text preview window panels
-                st.subheader("👀 Markdown Preview Window:")
-                st.text_area("Raw Text Layout Code", value=markdown_output, height=300)
+                    # Create a nice layout expander window for each converted file
+                    with st.expander(f"📄 Preview & Download: {file.name}"):
+                        st.text_area(
+                            "Markdown Code",
+                            value=markdown_output,
+                            height=150,
+                            key=f"txt_{file.name}",
+                        )
 
-                # Dynamic download button script interaction logic
-                clean_name = convert_file.name.rsplit(".", 1)[0] + ".md"
-                st.download_button(
-                    label="💾 Download Raw Markdown (.md) File",
-                    data=markdown_output,
-                    file_name=clean_name,
-                    mime="text/markdown",
-                    use_container_width=True,
-                )
-            except Exception as conv_err:
-                st.error(f"Conversion engine structural error: {conv_err}")
-            finally:
-                if os.path.exists(temp_conv_name):
-                    os.remove(temp_conv_name)
+                        clean_name = file.name.rsplit(".", 1)[0] + ".md"
+                        st.download_button(
+                            label=f"💾 Download {clean_name}",
+                            data=markdown_output,
+                            file_name=clean_name,
+                            mime="text/markdown",
+                            key=f"btn_{file.name}",
+                        )
+                except Exception as conv_err:
+                    st.error(f"Error converting {file.name}: {conv_err}")
+                finally:
+                    if os.path.exists(temp_conv_name):
+                        os.remove(temp_conv_name)

@@ -6,3 +6,6 @@ enableWebsocketCompression = false
 
 [browser]
 gatherUsageStats = false
+
+[server]
+maxUploadSize = 2000

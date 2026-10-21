@@ -67,3 +67,28 @@ def is_palindrome(word):
 
 This function `is_palindrome` takes a single argument, `word`, and returns `True` if the word is a palindrome, and `False` otherwise. It first normalizes the word by removing any spaces and converting all characters to lowercase to ensure the check is case-insensitive and ignores spaces. Then, it checks if the normalized word is equal to its reverse (obtained using slicing `[::-1]`). If they are equal, the word is a palindrome; otherwise, it is not.
 
+Question: can you tell me what's the major difference in the latest resume from old and what your analysis are
+Answer:
+After analyzing the extracted content, I can provide you with my observations on the changes and differences between the old and new resumes.
+
+**Changes in the latest resume:**
+
+1. **Simplification and concision**: The new resume is more concise and to the point, with a clearer structure and easier-to-read format.
+2. **Emphasis on achievements**: The new resume focuses more on Syed Rizwan Munawar's achievements and impact, rather than just listing his job responsibilities.
+3. **Use of bullet points**: The new resume uses bullet points to break up large blocks of text and make it easier to scan.
+4. **Reorganization of sections**: The new resume reorganizes the sections to prioritize Syed Rizwan Munawar's current role and experience, with a clear summary at the top.
+5. **Removal of redundant information**: The new resume removes redundant information, such as the repetition of "Global business and technology executive" in the summary section.
+6. **Increased use of action verbs**: The new resume uses more action verbs, such as "Led," "Directed," "Developed," and "Improved," to describe Syed Rizwan Munawar's achievements.
+7. **More prominent display of certifications and training**: The new resume highlights Syed Rizwan Munawar's certifications and training more prominently, which can be an asset for a professional looking to demonstrate their expertise.
+
+**Analysis:**
+
+1. **Modernization**: The new resume appears to be more modern and up-to-date, with a cleaner design and easier-to-read format.
+2. **Focus on achievements**: The new resume's emphasis on achievements suggests that Syed Rizwan Munawar is trying to showcase his impact and value as a professional, rather than just listing his job responsibilities.
+3. **Increased emphasis on technology**: The new resume highlights Syed Rizwan Munawar's experience with emerging technologies, such as AI, cloud, and data analytics, which is likely to be attractive to potential employers in these fields.
+4. **More concise language**: The new resume uses more concise language, which can make it easier for readers to quickly understand Syed Rizwan Munawar's background and experience.
+
+**Overall impression:**
+
+The new resume appears to be more polished and professional, with a clearer structure and easier-to-read format. It also highlights Syed Rizwan Munawar's achievements and impact, which can be an asset for a professional looking to demonstrate their value.
+

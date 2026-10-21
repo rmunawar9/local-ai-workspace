@@ -1,4 +1,5 @@
 import os
+import subprocess
 import streamlit as st
 from langchain_ollama import ChatOllama
 from pdf2image import convert_from_path
@@ -15,6 +16,19 @@ st.set_page_config(
 st.title("🤖 Local AI PDF & Coding Workspace")
 st.write("Secure offline analyzer featuring real-time stream generation.")
 
+
+# Helper function to get local git changes (git diff)
+def get_git_changes():
+    try:
+        # Run 'git diff' to see what changed in the files
+        result = subprocess.run(
+            ["git", "diff", "HEAD"], capture_output=True, text=True, check=True
+        )
+        return result.stdout.strip()
+    except Exception:
+        return ""
+
+
 # Sidebar Controls
 with st.sidebar:
     st.header("⚙️ Workspace Controls")
@@ -28,11 +42,40 @@ with st.sidebar:
     )
 
     st.markdown("---")
+    st.header("💻 Git Assistant Tools")
+
+    # 2. Smart Commit Message Button
+    if st.button("🤖 Generate Smart Commit", use_container_width=True):
+        changes = get_git_changes()
+        if not changes:
+            st.sidebar.info("✨ No unstaged code changes found. Everything is clean!")
+        else:
+            # Initialize Qwen specifically for the code change task
+            commit_llm = ChatOllama(model="qwen2.5-coder:1.5b", temperature=0)
+            commit_prompt = f"""
+            Task: Write a short, one-sentence Git commit message for the code changes below.
+            
+            Strict Rules:
+            - Start with a clear action verb (e.g., 'Add', 'Fix', 'Refactor', 'Update').
+            - Output ONLY the raw text sentence.
+            - Do NOT wrap it in quotes, code blocks, or markdown.
+            - Do NOT explain anything or print instructions.
+
+            --- CODE CHANGES ---
+            {changes}
+            --------------------
+            """
+            with st.sidebar.spinner("Analyzing changes..."):
+                commit_response = commit_llm.invoke(commit_prompt)
+                st.sidebar.success("💡 Suggested Commit Message:")
+                st.sidebar.code(commit_response.content, language="text")
+
+    st.markdown("---")
     st.header("📂 Document Center")
     uploaded_file = st.file_uploader("Upload your document.pdf here", type=["pdf"])
 
     st.markdown("---")
-    # 2. Clear Chat History Button
+    # 3. Clear Chat History Button
     if st.button("🗑️ Clear Chat History", use_container_width=True):
         st.session_state.messages = []
         st.toast("Conversation memory cleared!")

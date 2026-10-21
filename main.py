@@ -4,6 +4,7 @@ import streamlit as st
 from langchain_ollama import ChatOllama
 from pdf2image import convert_from_path
 import pytesseract
+from markitdown import MarkItDown
 
 # Page Configuration Setup
 st.set_page_config(
@@ -13,14 +14,13 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-st.title("🤖 Local AI PDF & Coding Workspace")
-st.write("Secure offline analyzer featuring real-time stream generation.")
+st.title("🤖 Local AI Multi-Tool Workspace")
+st.write("Secure offline analyzer, document converter, and coding engine.")
 
 
-# Helper function to get local git changes (git diff)
+# Helper function to get local git changes
 def get_git_changes():
     try:
-        # Run 'git diff' to see what changed in the files
         result = subprocess.run(
             ["git", "diff", "HEAD"], capture_output=True, text=True, check=True
         )
@@ -33,7 +33,6 @@ def get_git_changes():
 with st.sidebar:
     st.header("⚙️ Workspace Controls")
 
-    # 1. Dynamic Model Selection Dropdown
     selected_model = st.selectbox(
         "Select Local AI Model:",
         options=["llama3.2", "qwen2.5-coder:1.5b"],
@@ -44,38 +43,29 @@ with st.sidebar:
     st.markdown("---")
     st.header("💻 Git Assistant Tools")
 
-    # 2. Smart Commit Message Button
     if st.button("🤖 Generate Smart Commit", use_container_width=True):
         changes = get_git_changes()
         if not changes:
             st.sidebar.info("✨ No unstaged code changes found. Everything is clean!")
         else:
-            # Initialize Qwen specifically for the code change task
             commit_llm = ChatOllama(model="qwen2.5-coder:1.5b", temperature=0)
             commit_prompt = f"""
             Task: Write a short, one-sentence Git commit message for the code changes below.
-            
             Strict Rules:
             - Start with a clear action verb (e.g., 'Add', 'Fix', 'Refactor', 'Update').
             - Output ONLY the raw text sentence.
             - Do NOT wrap it in quotes, code blocks, or markdown.
             - Do NOT explain anything or print instructions.
-
             --- CODE CHANGES ---
             {changes}
             --------------------
-            """
+            Commit Message:"""
             with st.sidebar.spinner("Analyzing changes..."):
                 commit_response = commit_llm.invoke(commit_prompt)
                 st.sidebar.success("💡 Suggested Commit Message:")
                 st.sidebar.code(commit_response.content, language="text")
 
     st.markdown("---")
-    st.header("📂 Document Center")
-    uploaded_file = st.file_uploader("Upload your document.pdf here", type=["pdf"])
-
-    st.markdown("---")
-    # 3. Clear Chat History Button
     if st.button("🗑️ Clear Chat History", use_container_width=True):
         st.session_state.messages = []
         st.toast("Conversation memory cleared!")
@@ -93,75 +83,120 @@ try:
 except Exception as e:
     st.error(f"Ollama Connection Error: {e}")
 
-# Main Application Logic
-if uploaded_file is not None:
-    temp_filename = "temp_uploaded_document.pdf"
-    with open(temp_filename, "wb") as f:
-        f.write(uploaded_file.getbuffer())
+# Build clean horizontal workspace layout tabs
+tab1, tab2 = st.tabs(["💬 Local AI Document Chat", "📝 File to Markdown Converter"])
 
-    # Process text via OCR
-    if "pdf_text" not in st.session_state:
-        with st.spinner("👁️ Running OCR Text Extraction... Please wait..."):
-            try:
-                pages = convert_from_path(temp_filename, 150)
-                extracted_text = ""
-                for page_image in pages:
-                    extracted_text += pytesseract.image_to_string(page_image) + "\n"
+# ==================== TAB 1: AI DOCUMENT CHAT ====================
+with tab1:
+    st.header("📂 Chat with Scanned PDFs")
+    uploaded_file = st.file_uploader(
+        "Upload your document.pdf here", type=["pdf"], key="pdf_chat_uploader"
+    )
 
-                st.session_state["pdf_text"] = extracted_text
-                st.sidebar.success(f"Loaded {len(pages)} pages successfully!")
-            except Exception as e:
-                st.error(f"OCR Error: {e}")
-            finally:
-                if os.path.exists(temp_filename):
-                    os.remove(temp_filename)
+    if uploaded_file is not None:
+        temp_filename = "temp_uploaded_document.pdf"
+        with open(temp_filename, "wb") as f:
+            f.write(uploaded_file.getbuffer())
 
-    # Initialize chat history memory states
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
+        if "pdf_text" not in st.session_state:
+            with st.spinner("👁️ Running OCR Text Extraction..."):
+                try:
+                    pages = convert_from_path(temp_filename, 150)
+                    extracted_text = ""
+                    for page_image in pages:
+                        extracted_text += pytesseract.image_to_string(page_image) + "\n"
+                    st.session_state["pdf_text"] = extracted_text
+                    st.success(f"Loaded {len(pages)} pages successfully!")
+                except Exception as e:
+                    st.error(f"OCR Error: {e}")
+                finally:
+                    if os.path.exists(temp_filename):
+                        os.remove(temp_filename)
 
-    # Print out previous chat conversation cards cleanly
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+        if "messages" not in st.session_state:
+            st.session_state.messages = []
 
-    # Accept new user text prompt input entries
-    if user_question := st.chat_input(
-        "Ask a question about this document or code task..."
-    ):
-        with st.chat_message("user"):
-            st.markdown(user_question)
-        st.session_state.messages.append({"role": "user", "content": user_question})
+        for message in st.session_state.messages:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
 
-        # Process and stream the response content live on screen
-        with st.chat_message("assistant"):
-            prompt = f"""
-            You are an advanced local AI assistant. Use the context below if provided to answer the question cleanly.
-            ---
-            CONTEXT DATA:
-            {st.session_state.get("pdf_text", "")}
-            ---
-            QUESTION: {user_question}
-            """
+        if user_question := st.chat_input("Ask a question about this document..."):
+            with st.chat_message("user"):
+                st.markdown(user_question)
+            st.session_state.messages.append({"role": "user", "content": user_question})
 
-            def response_generator():
-                for chunk in llm.stream(prompt):
-                    yield chunk.content
+            with st.chat_message("assistant"):
+                prompt = f"""
+                You are a data assistant analyzing a PDF. Use the extracted text to answer cleanly.
+                ---
+                EXTRACTED CONTENT:
+                {st.session_state.get("pdf_text", "")}
+                ---
+                QUESTION: {user_question}
+                """
 
-            ai_answer = st.write_stream(response_generator())
+                def response_generator():
+                    for chunk in llm.stream(prompt):
+                        yield chunk.content
 
-        st.session_state.messages.append({"role": "assistant", "content": ai_answer})
+                ai_answer = st.write_stream(response_generator())
 
-        # Log conversation cleanly to file
-        with open("ai_analysis_report.txt", "a", encoding="utf-8") as report_file:
-            report_file.write(
-                f"[{selected_model}] Question: {user_question}\nAnswer:\n{ai_answer}\n\n"
+            st.session_state.messages.append(
+                {"role": "assistant", "content": ai_answer}
             )
 
-else:
-    st.info(
-        "💡 Please drag and drop a PDF file into the left sidebar to activate the AI conversational layer."
+            with open("ai_analysis_report.txt", "a", encoding="utf-8") as report_file:
+                report_file.write(
+                    f"Question: {user_question}\nAnswer:\n{ai_answer}\n\n"
+                )
+    else:
+        st.info("💡 Drop a PDF file here to activate the conversational chat box.")
+
+# ==================== TAB 2: MARKDOWN CONVERTER ====================
+with tab2:
+    st.header("🔄 Universal Markdown Converter")
+    st.write(
+        "Convert Word (`.docx`), Excel (`.xlsx`), PowerPoint (`.pptx`), or text logs directly into clean `.md` code structure."
     )
-    st.info(
-        "💡 Note: You can switch models in the sidebar menu at any time depending on your task."
+
+    convert_file = st.file_uploader(
+        "Upload any Office or Text document:",
+        type=["pdf", "docx", "xlsx", "pptx", "txt", "html"],
+        key="md_converter_uploader",
     )
+
+    if convert_file is not None:
+        # Save temporary file using its original naming extension layout
+        file_ext = convert_file.name.split(".")[-1]
+        temp_conv_name = f"temp_convert_input.{file_ext}"
+
+        with open(temp_conv_name, "wb") as f:
+            f.write(convert_file.getbuffer())
+
+        with st.spinner("Parsing structure and translating to Markdown..."):
+            try:
+                # Initialize Microsoft MarkItDown engine
+                md_engine = MarkItDown()
+                md_result = md_engine.convert(temp_conv_name)
+                markdown_output = md_result.text_content
+
+                st.success("🎉 Conversion Complete!")
+
+                # Show layout formatting text preview window panels
+                st.subheader("👀 Markdown Preview Window:")
+                st.text_area("Raw Text Layout Code", value=markdown_output, height=300)
+
+                # Dynamic download button script interaction logic
+                clean_name = convert_file.name.rsplit(".", 1)[0] + ".md"
+                st.download_button(
+                    label="💾 Download Raw Markdown (.md) File",
+                    data=markdown_output,
+                    file_name=clean_name,
+                    mime="text/markdown",
+                    use_container_width=True,
+                )
+            except Exception as conv_err:
+                st.error(f"Conversion engine structural error: {conv_err}")
+            finally:
+                if os.path.exists(temp_conv_name):
+                    os.remove(temp_conv_name)

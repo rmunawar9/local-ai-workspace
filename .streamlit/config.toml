@@ -3,9 +3,7 @@ headless = true
 enableCORS = false
 enableXsrfProtection = false
 enableWebsocketCompression = false
+maxUploadSize = 1000
 
 [browser]
 gatherUsageStats = false
-
-[server]
-maxUploadSize = 2000
